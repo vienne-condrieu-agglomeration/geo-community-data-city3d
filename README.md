@@ -37,13 +37,22 @@ Le workflow [`donnees.yml`](.github/workflows/donnees.yml), lancé **à la main*
 **Aucun jeton n'est nécessaire** : le `GITHUB_TOKEN` automatique suffit. Réglage fait une fois : *Settings > Pages > Source :
 GitHub Actions*.
 
+## Périmètre : les communes de l'agglomération
+
+[`tiles.txt`](tiles.txt) liste les **497 dalles** de 1 km qui touchent les 30 communes de Vienne Condrieu Agglomération (EPCI
+200077014, contours BD TOPO de l'IGN) ; elle se recalcule avec `tiles_from_communes.py` du dépôt de l'intégrateur. Une matrice GitHub
+Actions accepte 256 dalles au plus, donc la liste se publie en plusieurs lancements : [`lots/lot1.txt`](lots/lot1.txt) (les dalles
+les plus bâties : Vienne et les bourgs) et [`lots/lot2.txt`](lots/lot2.txt) (le reste, rural), chacun à coller dans l'entrée `dalles`
+du workflow. Les 23 dalles publiées en premier (essai autour de Vienne et dalles rurales) n'y figurent pas : un lancement conserve de toute
+façon les dalles déjà publiées.
+
 Points d'attention :
 
 - Une dalle demande environ 290 Mo de nuage et l'image PDAL (environ 4 Go) : si un job manque de disque ou de temps, ou si le tirage
   d'une image Docker est limité, relancer ou réduire le nombre de dalles.
 - Pour utiliser une nouvelle version de l'intégrateur, modifier `INTEGRATOR_VERSION` après avoir lu son `CHANGELOG.md` ; elle
   régénère toutes les dalles demandées.
-- Un site GitHub Pages ne dépasse pas 1 Go : environ 3 à 4 Mo par dalle urbaine, à surveiller avant d'étendre le périmètre.
+- Un site GitHub Pages ne dépasse pas 1 Go : environ 2 Mo par dalle urbaine et 1 Mo par dalle rurale (mesuré le 2026-11-18 sur 23 dalles : 1,4 Mo en moyenne, soit environ 600 Mo estimés pour les 497 dalles), à surveiller en étendant le périmètre.
 
 ## Licences
 
