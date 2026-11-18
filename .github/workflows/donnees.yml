@@ -103,11 +103,10 @@ jobs:
           repository: ${{ env.INTEGRATOR_REPOSITORY }}
           ref: ${{ env.INTEGRATOR_VERSION }}
           path: integrator
-      # L'image PDAL pèse environ 4 Go : on libère de la place sur le disque du runner (à retirer si inutile)
-      - name: Libérer de l'espace disque
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+      # Le runner dispose d'environ 80 Go libres (mesuré le 2026-11-18) : l'image PDAL (environ 4 Go) et une dalle (environ 0,5 Go) y tiennent
+      # sans rien supprimer. On garde l'état du disque dans le journal.
+      - name: Espace disque
+        run: df -h /
       - name: Reconstruire la dalle
         env:
           TILE: ${{ matrix.tile }}
@@ -153,10 +152,8 @@ jobs:
       - name: Rassembler
         id: merge
         run: |
-          parts=()
-          for d in parts/*/site; do
-            if [ -f "$d/index.json" ]; then parts+=("$d"); fi
-          done
+          # actions/download-artifact range un seul artefact directement dans parts/, plusieurs dans parts/<nom>/ : on cherche partout
+          mapfile -t parts < <(find parts -type f -path '*/site/index.json' -exec dirname {} \; | sort)
           if [ "${#parts[@]}" -eq 0 ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "Aucune dalle générée : rien à publier"
