@@ -1,0 +1,185 @@
+name: Données city3d
+
+# Prépare les fichiers de la maquette 3D du module geo-lidar-hd (bâtiments LoD2 .bld et canopée .veg) avec integrator-city3d
+# et les publie sur GitHub Pages : <site>/buildings/<dalle>.bld, <site>/vegetation/<dalle>.veg et <site>/index.json.
+#
+# Lancement à la main seulement (Actions > Données city3d > Run workflow) : le LiDAR HD est republié rarement.
+# Une dalle par job (matrice) ; une dalle déjà à jour dans l'index publié (même édition du nuage de l'IGN, mêmes outils, même
+# version de l'intégrateur) est ignorée. Un déploiement Pages remplace tout le site : le job « assemble » y remet donc les
+# dalles déjà publiées (commande merge de l'intégrateur). Aucun fichier de données n'est commité : l'historique reste léger.
+#
+# Aucun jeton à configurer : le GITHUB_TOKEN automatique suffit, et l'intégrateur est un dépôt public.
+# Réglage requis une fois : Settings > Pages > Build and deployment > Source : GitHub Actions.
+on:
+  workflow_dispatch:
+    inputs:
+      dalles:
+        description: "Dalles à générer : XXXX-YYYY séparées par des espaces, ou « around XXXX-YYYY » (la dalle et ses 8 voisines). Vide : toutes celles de tiles.txt"
+        required: false
+        type: string
+      force:
+        description: "Régénérer même si la dalle est à jour dans l'index publié"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Un seul déploiement à la fois, sans interrompre celui qui est en cours
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  INTEGRATOR_REPOSITORY: vienne-condrieu-agglomeration/geo-community-integrator-city3d
+  # Version de l'intégrateur utilisée (tag) : à changer à la main, après avoir lu son CHANGELOG
+  INTEGRATOR_VERSION: v0.1.0
+  PUBLISHED_INDEX: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/index.json
+
+jobs:
+  # Liste des dalles : l'entrée « dalles », à défaut tiles.txt. Validée par l'intégrateur lui-même (mêmes règles que sa CLI).
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      tiles: ${{ steps.plan.outputs.tiles }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.INTEGRATOR_REPOSITORY }}
+          ref: ${{ env.INTEGRATOR_VERSION }}
+          path: integrator
+      - name: Dalles à traiter
+        id: plan
+        env:
+          DALLES: ${{ inputs.dalles }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, sys
+          sys.path.insert(0, 'integrator')
+          import integrator_city3d as ic
+
+          text = os.environ.get('DALLES', '').strip()
+          if not text:
+              text = ' '.join(l.split('#')[0] for l in open('tiles.txt', encoding='utf-8'))
+          tokens, tiles, i = text.split(), [], 0
+          try:
+              while i < len(tokens):
+                  if tokens[i] == 'around':
+                      if i + 1 >= len(tokens):
+                          raise ic.Error('« around » demande une dalle')
+                      tiles += ic.expand_tiles(None, tokens[i + 1])
+                      i += 2
+                  else:
+                      tiles += ic.expand_tiles([tokens[i]])
+                      i += 1
+              tiles = list(dict.fromkeys(tiles))
+              if not tiles:
+                  raise ic.Error('aucune dalle à traiter')
+              if len(tiles) > 256:
+                  raise ic.Error('%d dalles : une matrice GitHub en accepte 256 au plus, lancer en plusieurs fois' % len(tiles))
+          except ic.Error as e:
+              print('::error::%s' % e)
+              sys.exit(1)
+          print('%d dalle(s) : %s' % (len(tiles), ' '.join(tiles)))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write('tiles=%s\n' % json.dumps(tiles))
+          PY
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      # data.geopf.fr limite le débit (429) : peu de dalles en parallèle
+      max-parallel: 3
+      matrix:
+        tile: ${{ fromJson(needs.plan.outputs.tiles) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.INTEGRATOR_REPOSITORY }}
+          ref: ${{ env.INTEGRATOR_VERSION }}
+          path: integrator
+      # L'image PDAL pèse environ 4 Go : on libère de la place sur le disque du runner (à retirer si inutile)
+      - name: Libérer de l'espace disque
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Reconstruire la dalle
+        env:
+          TILE: ${{ matrix.tile }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          [[ "$TILE" =~ ^[0-9]{4}-[0-9]{4}$ ]] || { echo "::error::dalle invalide : $TILE"; exit 1; }
+          mkdir -p part
+          echo "$TILE" > part/tile.txt
+          args=(download --tiles "$TILE" --output part/site --cache "$RUNNER_TEMP/city3d" --purge --previous-index "$PUBLISHED_INDEX")
+          if [ "$FORCE" = "true" ]; then args+=(--force); fi
+          code=0
+          python3 -I integrator/integrator_city3d.py "${args[@]}" || code=$?
+          case "$code" in
+            0)  echo "Dalle $TILE générée" ;;
+            10) echo "Dalle $TILE déjà à jour : rien à publier pour elle" ;;
+            *)  exit "$code" ;;
+          esac
+      # Toujours déposé (tile.txt au minimum) ; part/site n'existe que si la dalle a été générée
+      - uses: actions/upload-artifact@v7
+        with:
+          name: part-${{ matrix.tile }}
+          path: part
+          retention-days: 1
+
+  # Rassemble les dalles générées avec celles déjà publiées, puis prépare le site
+  assemble:
+    needs: build
+    if: ${{ !cancelled() && needs.build.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.merge.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.INTEGRATOR_REPOSITORY }}
+          ref: ${{ env.INTEGRATOR_VERSION }}
+          path: integrator
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: part-*
+          path: parts
+      - name: Rassembler
+        id: merge
+        run: |
+          parts=()
+          for d in parts/*/site; do
+            if [ -f "$d/index.json" ]; then parts+=("$d"); fi
+          done
+          if [ "${#parts[@]}" -eq 0 ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Aucune dalle générée : rien à publier"
+            exit 0
+          fi
+          python3 -I integrator/integrator_city3d.py merge --previous-index "$PUBLISHED_INDEX" --output site "${parts[@]}"
+          cp public/index.html site/index.html
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-pages-artifact@v5
+        if: steps.merge.outputs.publish == 'true'
+        with:
+          path: site
+
+  deploy:
+    needs: assemble
+    if: ${{ !cancelled() && needs.assemble.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v5
+        id: deployment

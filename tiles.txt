@@ -1,0 +1,4 @@
+# Dalles LiDAR HD publiées, une par ligne : « XXXX-YYYY » (coin nord-ouest en km, Lambert-93)
+# ou « around XXXX-YYYY » (la dalle et ses 8 voisines). Les lignes commençant par # sont ignorées.
+# Lues par le workflow quand l'entrée « dalles » est vide.
+around 0846-6494

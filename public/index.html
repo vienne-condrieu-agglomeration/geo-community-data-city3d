@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Données city3d</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
+    code { background: rgba(127, 127, 127, .15); padding: .1em .3em; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Données city3d : la ville en 3D pour la maquette</h1>
+  <p>
+    Un fichier de bâtiments (<code>buildings/&lt;dalle&gt;.bld</code>) et un fichier de canopée
+    (<code>vegetation/&lt;dalle&gt;.veg</code>) par dalle LiDAR HD, lus par le panneau Maquette du module GEO
+    geo-lidar-hd. Le fichier <a href="index.json"><code>index.json</code></a> donne le format, les dalles publiées, leurs
+    tailles et leurs empreintes.
+  </p>
+  <h2>Source et licence</h2>
+  <p>
+    Données dérivées du <a href="https://geoservices.ign.fr/lidarhd">LiDAR HD</a> et de la
+    <a href="https://geoservices.ign.fr/bdtopo">BD TOPO®</a> de l'IGN, sous
+    <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/">Licence Ouverte 2.0</a>. Source : IGN, LiDAR HD et
+    BD TOPO®, traitement Vienne Condrieu Agglomération. Les bâtiments sont reconstruits par
+    <a href="https://github.com/3DBAG/roofer">roofer</a>.
+  </p>
+  <h2>Limites</h2>
+  <p>
+    Reconstruction automatique : les formes sont approchées (toits simplifiés, arbres en volumes simples), sans valeur
+    de relevé.
+  </p>
+  <h2>Projet</h2>
+  <p>
+    Projet communautaire indépendant, non affilié à Business Geografic. Code de l'intégrateur :
+    <a href="https://github.com/vienne-condrieu-agglomeration/geo-community-integrator-city3d">geo-community-integrator-city3d</a>.
+  </p>
+</body>
+</html>
