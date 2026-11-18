@@ -34,7 +34,7 @@ concurrency:
 env:
   INTEGRATOR_REPOSITORY: vienne-condrieu-agglomeration/geo-community-integrator-city3d
   # Version de l'intégrateur utilisée (tag) : à changer à la main, après avoir lu son CHANGELOG
-  INTEGRATOR_VERSION: v0.1.0
+  INTEGRATOR_VERSION: v0.1.1
   PUBLISHED_INDEX: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/index.json
 
 jobs:
